@@ -43,7 +43,7 @@ function HID() {
         `this._raw`
     */
     for(var i in binding.HID.prototype)
-        if(i != "open" && i != "close" && i != "read")
+        if(i != "open" && i != "close" && i != "read" && i != "write")
             this[i] = binding.HID.prototype[i].bind(this._raw);
 
     this._closed = true;
@@ -69,17 +69,41 @@ function HID() {
 util.inherits(HID, EventEmitter);
 //Don't inherit from `binding.HID`; that's done above already!
 
-HID.prototype.open = function open() {
-    this._raw.open();
-    this._closed = false;
-    this.resume();
+HID.prototype.open = function open(callback) {
+    var err = null;
+
+    try {
+        this._raw.open();
+        this._closed = false;
+        this.resume();
+    } catch (e) {
+        err = e;
+    }
+
+    if (typeof(callback) === "function") {
+        return process.nextTick(callback.bind(this, err));
+    } else if (err) {
+        throw err;
+    }
 };
 
-HID.prototype.close = function close() {
-    this._closing = true;
-    this.removeAllListeners();
-    this._raw.close();
-    this._closed = true;
+HID.prototype.close = function close(callback) {
+    var err = null;
+
+    try {
+        this._closing = true;
+        this.removeAllListeners();
+        this._raw.close();
+        this._closed = true;
+    } catch (e) {
+        err = e;
+    }
+
+    if (typeof(callback) === "function") {
+        process.nextTick(callback.bind(this, err));
+    } else if (err) {
+        throw err;
+    }
 };
 //Pauses the reader, which stops "data" events from being emitted
 HID.prototype.pause = function pause() {
@@ -87,11 +111,39 @@ HID.prototype.pause = function pause() {
 };
 
 HID.prototype.read = function read(callback) {
-    if (this._closed) {
-    throw new Error('Unable to read from a closed HID device');
-  } else {
-    return this._raw.read(callback);
-  }
+    var err = null;
+
+    try {
+        if (this._closed) {
+            throw new Error('Unable to read from a closed HID device');
+        } else {
+            return this._raw.read(callback);
+        }
+    } catch (e) {
+        err = e;
+    }
+
+    if (typeof(callback) === "function") {
+        process.nextTick(callback.bind(this, err));
+    } else if (err) {
+        throw err;
+    }
+};
+
+HID.prototype.write = function write(data, callback) {
+    var err = null;
+
+    try {
+        this._raw.write(data);
+    } catch (e) {
+        err = e;
+    }
+
+    if (typeof(callback) === "function") {
+        process.nextTick(callback.bind(this, err));
+    } else if (err) {
+        throw err;
+    }
 };
 
 HID.prototype.resume = function resume() {
@@ -126,4 +178,21 @@ HID.prototype.resume = function resume() {
 
 //Expose API
 exports.HID = HID;
-exports.devices = binding.devices;
+exports.devices = function(callback) {
+    var err = null;
+    var devices = null;
+
+    try {
+        devices = binding.devices();
+    } catch (e) {
+        err = e;
+    }
+
+    if (typeof(callback) === "function") {
+        return process.nextTick(callback.bind(this, err, devices));
+    } else if (err) {
+        throw err;
+    }
+
+    return devices;
+}
